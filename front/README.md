@@ -1,3 +1,3 @@
 # Front
 
-Frontend React/Vite que consome a API em `http://localhost:3000`.
+Frontend React/Vite com tabela de eventos consumindo `/api/events`.
