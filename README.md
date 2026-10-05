@@ -1,44 +1,51 @@
 # Events CRUD
 
-Projeto inicial para gerenciamento de eventos, organizado em três aplicações/áreas:
-
-- `api/`: API REST em NestJS para o CRUD da tabela `events`.
-- `front/`: interface web em React/Vite para consumo da API.
-- `deploy/`: arquivos de Docker Compose e configurações de execução.
+Aplicação para gerenciamento de eventos com **NestJS**, **React**, **PostgreSQL** e **Docker Compose**.
 
 ## Sumário
 
 - [Requisitos](#requisitos)
-- [Como executar via Docker Compose](#como-executar-via-docker-compose)
-- [Estrutura do projeto](#estrutura-do-projeto)
+- [Estrutura](#estrutura)
+- [Como executar via Compose](#como-executar-via-compose)
+- [Serviços, redes e volume](#serviços-redes-e-volume)
 - [Modelo de dados](#modelo-de-dados)
 - [Endpoints CRUD](#endpoints-crud)
-- [Exemplos de resposta](#exemplos-de-resposta)
+- [Exemplos de requisição e resposta](#exemplos-de-requisição-e-resposta)
+- [Swagger](#swagger)
+- [Como verificar persistência](#como-verificar-persistência)
 - [Como derrubar os recursos](#como-derrubar-os-recursos)
-- [Execução local](#execução-local)
 
 ## Requisitos
 
 - Git 2.40+
 - Docker Engine 24+
 - Docker Compose v2 (`docker compose`)
-- Node.js 20+ e npm 10+ (apenas para execução local sem Docker)
+- Node.js 20+ e npm 10+ apenas para execução local sem Docker
 
-## Como executar via Docker Compose
+## Estrutura
 
-Na raiz do repositório, execute:
+```text
+.
+├── api/       # API NestJS, TypeORM, DTOs, validação e Swagger
+├── front/     # Frontend React/Vite com tabela de eventos
+├── deploy/    # Docker Compose, redes isoladas e volume PostgreSQL
+└── README.md
+```
+
+## Como executar via Compose
+
+Clone o repositório e entre na raiz:
 
 ```bash
 git clone https://github.com/Eduardosilvarolli/events-crud.git
 cd events-crud
-docker compose -f deploy/docker-compose.yml up --build
 ```
 
-Após a inicialização:
+Suba os três serviços com um único comando:
 
-- API: http://localhost:3000
-- Frontend: http://localhost:5173
-- Health check: http://localhost:3000/health
+```bash
+docker compose -f deploy/docker-compose.yml up --build
+```
 
 Para executar em segundo plano:
 
@@ -46,63 +53,55 @@ Para executar em segundo plano:
 docker compose -f deploy/docker-compose.yml up --build -d
 ```
 
-## Estrutura do projeto
+Endereços:
 
-```text
-.
-├── api/       # NestJS: API REST e regras do CRUD
-├── front/     # React/Vite: interface web
-├── deploy/    # Docker Compose e arquivos de implantação
-└── README.md
-```
+- Frontend: http://localhost:5173
+- API: http://localhost:3000
+- Swagger: http://localhost:3000/docs
+- PostgreSQL: `localhost:5432`
+
+## Serviços, redes e volume
+
+| Serviço | Imagem/porta | Função |
+|---|---|---|
+| `postgres` | `postgres:16-alpine`, `5432` | Banco de dados persistente |
+| `api` | NestJS, `3000` | API REST do CRUD |
+| `front` | React/Vite, `5173` | Tabela de eventos |
+
+O Compose define duas redes isoladas:
+
+- `events_api_db`: comunicação entre API e PostgreSQL;
+- `events_api_front`: comunicação entre API e Front.
+
+O PostgreSQL usa o volume nomeado `events_postgres_data`. A API acessa o banco pelo DNS interno `postgres`, e o Front acessa a API pelo proxy `/api` usando o DNS interno `api`.
 
 ## Modelo de dados
 
-Tabela lógica `events`:
+Tabela: `events`
 
-| Campo | Tipo sugerido | Obrigatório | Descrição |
+| Campo | Tipo | Obrigatório | Descrição |
 |---|---|---:|---|
 | `id` | integer | sim | Identificador único |
 | `title` | string | sim | Título do evento |
-| `starts_at` | ISO 8601 datetime | sim | Data/hora de início |
-| `ends_at` | ISO 8601 datetime | não | Data/hora de término |
+| `starts_at` | timestamptz | sim | Data e hora de início |
+| `ends_at` | timestamptz | não | Data e hora de término |
 | `location` | string | não | Local do evento |
-
-Registro inicial de exemplo:
-
-```json
-{
-  "id": 1,
-  "title": "Preparação do repositório e README",
-  "starts_at": "2026-10-05T19:34:16-03:00",
-  "ends_at": "2026-10-05T21:00:00-03:00",
-  "location": " remoto"
-}
-```
 
 ## Endpoints CRUD
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/health` | Verifica se a API está disponível |
 | `GET` | `/events` | Lista todos os eventos |
 | `GET` | `/events/:id` | Busca um evento pelo ID |
 | `POST` | `/events` | Cria um evento |
 | `PATCH` | `/events/:id` | Atualiza parcialmente um evento |
 | `DELETE` | `/events/:id` | Remove um evento |
 
-### Payload para criação
+A API utiliza DTOs com validação de título, datas ISO 8601 e campos opcionais.
 
-```json
-{
-  "title": "Reunião de planejamento",
-  "starts_at": "2026-10-10T14:00:00Z",
-  "ends_at": "2026-10-10T15:00:00Z",
-  "location": "Sala 2"
-}
-```
+## Exemplos de requisição e resposta
 
-Exemplo com `curl`:
+### Criar evento
 
 ```bash
 curl -X POST http://localhost:3000/events \\
@@ -110,9 +109,25 @@ curl -X POST http://localhost:3000/events \\
   -d '{"title":"Reunião de planejamento","starts_at":"2026-10-10T14:00:00Z","ends_at":"2026-10-10T15:00:00Z","location":"Sala 2"}'
 ```
 
-## Exemplos de resposta
+Resposta `201 Created`:
 
-### `GET /events`
+```json
+{
+  "id": 1,
+  "title": "Reunião de planejamento",
+  "starts_at": "2026-10-10T14:00:00.000Z",
+  "ends_at": "2026-10-10T15:00:00.000Z",
+  "location": "Sala 2"
+}
+```
+
+### Listar eventos
+
+```bash
+curl http://localhost:3000/events
+```
+
+Resposta:
 
 ```json
 [
@@ -126,19 +141,30 @@ curl -X POST http://localhost:3000/events \\
 ]
 ```
 
-### `POST /events` — `201 Created`
+### Atualizar evento
+
+```bash
+curl -X PATCH http://localhost:3000/events/1 \\
+  -H 'Content-Type: application/json' \\
+  -d '{"location":"Sala 3"}'
+```
+
+### Excluir evento
+
+```bash
+curl -X DELETE http://localhost:3000/events/1
+```
+
+Resposta:
 
 ```json
 {
-  "id": 2,
-  "title": "Reunião de planejamento",
-  "starts_at": "2026-10-10T14:00:00.000Z",
-  "ends_at": "2026-10-10T15:00:00.000Z",
-  "location": "Sala 2"
+  "message": "Evento removido com sucesso",
+  "id": 1
 }
 ```
 
-### Erro — `404 Not Found`
+### Erro de validação ou evento inexistente
 
 ```json
 {
@@ -148,32 +174,59 @@ curl -X POST http://localhost:3000/events \\
 }
 ```
 
+## Swagger
+
+Com os serviços em execução, abra:
+
+```text
+http://localhost:3000/docs
+```
+
+A documentação permite testar os endpoints `GET`, `POST`, `PATCH` e `DELETE` diretamente no navegador.
+
+## Como verificar persistência
+
+Crie um evento, desligue apenas os containers e suba novamente:
+
+```bash
+curl -X POST http://localhost:3000/events \\
+  -H 'Content-Type: application/json' \\
+  -d '{"title":"Evento persistente","starts_at":"2026-10-10T14:00:00Z"}'
+
+docker compose -f deploy/docker-compose.yml down
+docker compose -f deploy/docker-compose.yml up -d
+curl http://localhost:3000/events
+```
+
+O registro deve continuar existindo porque está armazenado no volume `events_postgres_data`.
+
 ## Como derrubar os recursos
 
-Para parar e remover os containers e a rede criada pelo Compose:
+Parar e remover containers e redes:
 
 ```bash
 docker compose -f deploy/docker-compose.yml down
 ```
 
-Para também remover volumes associados:
+Parar, remover containers, redes e o volume do PostgreSQL:
 
 ```bash
 docker compose -f deploy/docker-compose.yml down -v
 ```
 
-Para remover imagens construídas pelo projeto:
+Remover também as imagens construídas localmente:
 
 ```bash
 docker compose -f deploy/docker-compose.yml down --rmi local
 ```
 
-## Execução local
+## Execução local sem Docker
 
 API:
 
 ```bash
 cd api
+cp .env.example .env
 npm install
 npm run start:dev
 ```
