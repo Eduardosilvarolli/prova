@@ -1,6 +1,6 @@
 # Deploy
 
-A execução local usa `docker-compose.yml` para subir a API NestJS e o frontend React.
+O Compose sobe PostgreSQL, API NestJS e Front React em uma execução.
 
 ```bash
 docker compose -f docker-compose.yml up --build
